@@ -1,33 +1,33 @@
 package ru.atc.camel.keymile.events;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+//import java.io.BufferedReader;
+//import java.io.File;
+//import java.io.FileNotFoundException;
+//import java.io.FileReader;
+//import java.io.FileWriter;
+//import java.io.IOException;
+//import java.io.InputStreamReader;
+//import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+//import java.util.regex.Matcher;
+//import java.util.regex.Pattern;
 
-import org.apache.camel.Endpoint;
+//import org.apache.camel.Endpoint;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
-import org.apache.camel.Producer;
-import org.apache.camel.ProducerTemplate;
-import org.apache.camel.component.cache.CacheConstants;
+//import org.apache.camel.Producer;
+//import org.apache.camel.ProducerTemplate;
+//import org.apache.camel.component.cache.CacheConstants;
 import org.apache.camel.impl.ScheduledPollConsumer;
 import org.apache.camel.model.ModelCamelContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.thoughtworks.xstream.io.json.JsonWriter.Format;
+//import com.thoughtworks.xstream.io.json.JsonWriter.Format;
 
 //import com.apc.stdws.xsd.isxcentral._2009._10.ISXCDevice;
 //import com.apc.stdws.xsd.isxcentral._2009._10.ISXCAlarmSeverity;
@@ -42,11 +42,12 @@ import com.thoughtworks.xstream.io.json.JsonWriter.Format;
 
 //import ru.at_consulting.itsm.device.Device;
 import ru.at_consulting.itsm.event.Event;
-import ru.atc.camel.keymile.events.api.OVMMDevices;
-import ru.atc.camel.keymile.events.api.OVMMEvents;
+//import ru.atc.camel.keymile.events.api.OVMMDevices;
+//import ru.atc.camel.keymile.events.api.OVMMEvents;
 
 import javax.sql.DataSource;
 import org.apache.commons.dbcp.BasicDataSource;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.exception.ExceptionUtils;
 
 import java.sql.Connection;
@@ -204,36 +205,48 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 		BasicDataSource dataSource = setupDataSource();
 		
 		List<HashMap<String, Object>> listOpenEvents = new ArrayList<HashMap<String,Object>>();
+		List<HashMap<String, Object>> listClosedEvents = new ArrayList<HashMap<String,Object>>();
 		//List<HashMap<String, Object>> listVmStatuses = null;
 		int events = 0;
-		int statuses = 0;
+		//int statuses = 0;
 		try {
 			
 			logger.info( String.format("***Try to get Open Events***"));
 			
+			// get All new (Open) events
 			listOpenEvents = getOpenEvents(dataSource);
-			
 			logger.info( String.format("***Received %d Open Events from SQL***", listOpenEvents.size()));
+			
+			// get All Closed events
+			listClosedEvents = getClosedEvents(dataSource);
+			logger.info( String.format("***Received %d Closed Events from SQL***", listClosedEvents.size()));
+			
+			List<HashMap<String, Object>> listAllEvents = new ArrayList<HashMap<String,Object>>();
+			listAllEvents.addAll(listOpenEvents);
+			listAllEvents.addAll(listClosedEvents);
+			
+			// List<HashMap<String, Object>> allevents = (List<HashMap<String, Object>>) ArrayUtils.addAll(listOpenEvents);
+			
 			String alarmtext, location;
 			
 			Event genevent = new Event();
 			
 			//logger.info( String.format("***Try to get VMs statuses***"));
-			for(int i=0; i < listOpenEvents.size(); i++) {
+			for(int i=0; i < listAllEvents.size(); i++) {
 			  	
-				alarmtext = listOpenEvents.get(i).get("alarmtext").toString();
-				location  = listOpenEvents.get(i).get("location").toString();
+				alarmtext = listAllEvents.get(i).get("alarmtext").toString();
+				location  = listAllEvents.get(i).get("location").toString();
 				logger.debug("DB row " + i + ": " + alarmtext + 
 						" " + location);
 				
-				genevent = genEventObj(listOpenEvents.get(i));
+				genevent = genEventObj(listAllEvents.get(i));
 				
 				logger.debug("*** Create Exchange ***" );
 				
 				
 				String key = genevent.getHost() + "_" +
-						genevent.getObject() + "_" + 
-						genevent.getExternalid();
+						genevent.getExternalid() + "_" + 
+						genevent.getStatus();
 				
 				Exchange exchange = getEndpoint().createExchange();
 				exchange.getIn().setBody(genevent, Event.class);
@@ -261,14 +274,18 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 					
 			}
 			
-			logger.info( String.format("***Received %d Keymile Open Events from SQL*** ", statuses));
-	  
+			logger.info( String.format("***Received %d Keymile Open Events from SQL*** ", listOpenEvents.size()));
+			logger.info( String.format("***Received %d Keymile Closed Events from SQL*** ", listClosedEvents.size()));
+			
+           // logger.info(" **** Received " + events.length + " Opened Events ****");
+    		
+    		
 			
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 			logger.error( String.format("Error while get Events from SQL: %s ", e));
-			genErrorMessage(e.toString());
+			genErrorMessage(e.getMessage() + " " + e.toString());
 			dataSource.close();
 			return 0;
 		}
@@ -276,7 +293,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 			logger.error( String.format("Error while get Events from SQL: %s ", e));
-			genErrorMessage(e.toString());
+			genErrorMessage(e.getMessage() + " " + e.toString());
 			dataSource.close();
 			return 0;
 		}
@@ -284,7 +301,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 			logger.error( String.format("Error while get Events from SQL: %s ", e));
-			genErrorMessage(e.toString());
+			genErrorMessage(e.getMessage() + " " + e.toString());
 			dataSource.close();
 			return 0;
 		}
@@ -306,26 +323,178 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 		
 		logger.info( String.format("***Sended to Exchange messages: %d ***", events));
 		
-		removeLineFromFile("sendedEvents.dat", "Tgc1-1Cp1_ping_OK");
+		//removeLineFromFile("sendedEvents.dat", "Tgc1-1Cp1_ping_OK");
 	
         return 1;
 	}
 	
+	private List<HashMap<String, Object>> getClosedEvents(BasicDataSource dataSource) throws SQLException, Throwable {
+		// TODO Auto-generated method stub
+		
+		int event_count = 0;
+		List<HashMap<String,Object>> list = new ArrayList<HashMap<String,Object>>();
+		Connection con = null; 
+	    PreparedStatement pstmt;
+	    ResultSet resultset = null;
+	    
+	    logger.debug(" **** Try to receive Closed Events ***** " );
+	    try {
+	    	for(int i=0; i < openids.length; i++){
+	    		
+	    		logger.debug(" **** Try to receive Closed Events for " + openids[i] );
+		    	con = (Connection) dataSource.getConnection();
+				//con.setAutoCommit(false);
+				
+		        pstmt = con.prepareStatement("SELECT  " + 
+		        		"id, alarm.neid as neid, ne.name as ne_name, eventid,  moi, perceivedseverity, alarm.location as location, " +
+						" alarmtext, alarmontime, cast(coalesce(nullif(alarmofftime, 0),'0') as integer) as alarmofftime, slotid, layerid, subunitid, unitname, " +
+						" unit.cfgname as cfgname,  unit.cfgdescription as cfgdescription,  unit.unitid  " + 
+						"FROM  public.alarm, public.ne, public.unit  " +
+		                "WHERE alarm.neid = ne.neid " +
+		                "AND alarm.alarmofftime is not null " + 
+		                "AND alarm.slotid = unit.slot  " +
+		                "AND alarm.neid = unit.neid "+
+		                "AND alarm.id = ?");
+		                   // +" LIMIT ?;");
+		        //pstmt.setString(1, "");
+		        pstmt.setString(1, openids[i]);
+		        
+		        logger.debug("DB query: " +  pstmt.toString()); 
+		        resultset = pstmt.executeQuery();
+		        //con.commit();
+		        
+		        list = convertRStoList(resultset);
+		        list.addAll(list);
+
+		        resultset.close();
+		        pstmt.close();
+		        
+		        if (con != null) con.close();
+			}
+	    	
+	    	return list;
+	    	
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			//e.printStackTrace();
+			logger.error( String.format("Error while SQL execution: %s ", e));
+			
+			if (con != null) con.close();
+			
+			//return null;
+			throw e;
+	
+		} catch (Throwable e) { //send error message to the same queue
+			// TODO Auto-generated catch block
+			logger.error( String.format("Error while execution: %s ", e));
+			//genErrorMessage(e.getMessage());
+			// 0;
+			throw e;
+		} finally {
+	        if (con != null) con.close();
+	        
+	        //return list;
+	    }
+		
+	}
+
+	private List<HashMap<String, Object>> getOpenEvents(BasicDataSource dataSource) throws SQLException {
+		// TODO Auto-generated method stub
+	    
+		List<HashMap<String,Object>> list = new ArrayList<HashMap<String,Object>>();
+		
+	    Connection con = null; 
+	    PreparedStatement pstmt;
+	    ResultSet resultset = null;
+	    try {
+	    	con = (Connection) dataSource.getConnection();
+			//con.setAutoCommit(false);
+			
+	        pstmt = con.prepareStatement("SELECT  " + 
+	        		"id, alarm.neid as neid, ne.name as ne_name, eventid,  moi, perceivedseverity, alarm.location as location, " +
+					" alarmtext, alarmontime, cast(coalesce(nullif(alarmofftime, 0),'0') as integer) as alarmofftime, slotid, layerid, subunitid, unitname, " +
+	                " unit.cfgname as cfgname,  unit.cfgdescription as cfgdescription,  unit.unitid  " + 
+					"FROM  public.alarm, public.ne, public.unit " +
+	                "WHERE alarm.neid = ne.neid " +
+	                "AND alarm.alarmofftime is null   " +
+	                "AND alarm.slotid = unit.slot  " +
+	                "AND alarm.neid = unit.neid;");
+	                   // +" LIMIT ?;");
+	        //pstmt.setString(1, "");
+	        //pstmt.setInt(2, 3);
+	        
+	        logger.debug("DB query: " +  pstmt.toString()); 
+	        resultset = pstmt.executeQuery();
+	        //resultset.get
+	        //con.commit();
+	        
+	        list = convertRStoList(resultset);
+	        
+	        
+	        resultset.close();
+	        pstmt.close();
+	        
+	        if (con != null) con.close();
+	        
+	        logger.debug(" **** Saving Received opened events's IDs ****");
+			
+			openids = new String[]{ };
+			for(int i=0; i < list.size(); i++){
+				openids = (String[]) ArrayUtils.add(openids,list.get(i).get("id").toString());
+				logger.debug(" **** Saving ID: " + list.get(i).get("id").toString());
+			}
+			
+			logger.info(" **** Saved " + openids.length + " Opened Events ****");
+	
+	        
+	        return list;
+	        
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			//e.printStackTrace();
+			logger.error( String.format("Error while SQL execution: %s ", e));
+			
+			if (con != null) con.close();
+			
+			//return null;
+			throw e;
+	
+		} catch (Throwable e) { //send error message to the same queue
+			// TODO Auto-generated catch block
+			logger.error( String.format("Error while execution: %s ", e));
+			//genErrorMessage(e.getMessage());
+			// 0;
+			throw e;
+		} finally {
+	        if (con != null) con.close();
+	        
+	        //return list;
+	    }
+	    
+	
+		
+	}
+
 	private Event genEventObj(HashMap<String, Object> alarm) {
 		// TODO Auto-generated method stub
 		Event event;
 		
 		event = new Event();
-
-		Long eventdate = (long) Integer.parseInt(alarm.get("alarmontime").toString());
 		
-		event.setTimestamp(eventdate);
-
+		logger.debug( String.format("ID: %s ", alarm.get("id").toString()));
+		
+		Long eventclosedate = (long) 0, eventopendate = (long) 0;
+		eventopendate = (long) Integer.parseInt(alarm.get("alarmontime").toString());
+		eventclosedate = (long) Integer.parseInt(alarm.get("alarmofftime").toString());
+		
+		logger.debug( String.format("alarmofftime: %s, %d ", alarm.get("alarmofftime").toString(), eventclosedate ));
+		
 		event.setHost(alarm.get("ne_name").toString());
 		//event.setCi(vmtitle);
 		//vmStatuses.get("ping_colour").toString())
 		event.setObject(alarm.get("moi").toString());
 		event.setExternalid(alarm.get("id").toString());
+		event.setCi(String.format("%s",alarm.get("unitid").toString()));
 		//event.setParametr("Status");
 		//String status = "OPEN";
 		//event.setParametrValue(status);
@@ -336,7 +505,15 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 								alarm.get("location").toString()
 								));
 		event.setCategory("NETWORK");
-		event.setStatus("OPEN");
+		if (eventclosedate != 0) {
+			event.setTimestamp(eventclosedate);
+			event.setStatus("CLOSED");
+		}
+		else {
+			event.setTimestamp(eventopendate);
+			event.setStatus("OPEN");
+		}
+		
 		//event.setService(endpoint.getConfiguration().getSource());
 		event.setEventsource(endpoint.getConfiguration().getSource());
 		
@@ -348,60 +525,6 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 		return event;
 	}
 
-	private List<HashMap<String, Object>> getOpenEvents(DataSource dataSource) throws SQLException {
-		// TODO Auto-generated method stub
-        
-		List<HashMap<String,Object>> list = new ArrayList<HashMap<String,Object>>();
-		
-        Connection con = null; 
-        PreparedStatement pstmt;
-        ResultSet resultset = null;
-        try {
-        	con = (Connection) dataSource.getConnection();
-			//con.setAutoCommit(false);
-			
-            pstmt = con.prepareStatement("SELECT  " + 
-            		"id, alarm.neid as neid, ne.name as ne_name, eventid,  moi, perceivedseverity, alarm.location as location, " +
-					" alarmtext, alarmontime, slotid, layerid, subunitid, unitname " +
-                    "FROM  public.alarm, public.ne " +
-                    "WHERE alarm.neid = ne.neid " +
-                    "AND alarm.alarmofftime is null;");
-                       // +" LIMIT ?;");
-            //pstmt.setString(1, "");
-            //pstmt.setInt(2, 3);
-            
-            logger.debug("DB query: " +  pstmt.toString()); 
-            resultset = pstmt.executeQuery();
-            //con.commit();
-            
-            list = convertRStoList(resultset);
-            
-            
-            resultset.close();
-            pstmt.close();
-            
-            if (con != null) con.close();
-            
-            return list;
-            
-		} catch (SQLException e) {
-			// TODO Auto-generated catch block
-			//e.printStackTrace();
-			logger.error( String.format("Error while SQL execution: %s ", e));
-			
-			if (con != null) con.close();
-			
-			//return null;
-			throw e;
-
-		} finally {
-            if (con != null) con.close();
-            
-            //return list;
-        }
-		
-	}
-	
 	private List<HashMap<String, Object>> convertRStoList(ResultSet resultset) throws SQLException {
 		
 		List<HashMap<String,Object>> list = new ArrayList<HashMap<String,Object>>();
@@ -411,7 +534,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 	        int columns = md.getColumnCount();
 	        //result.getArray(columnIndex)
 	        //resultset.get
-	        logger.debug("MYSQL columns count: " + columns); 
+	        logger.debug("DB SQL columns count: " + columns); 
 	        
 	        //resultset.last();
 	        //int count = resultset.getRow();
@@ -424,6 +547,8 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 	        while (resultset.next()) {              
 	        	HashMap<String,Object> row = new HashMap<String, Object>(columns);
 	            for(int i1=1; i1<=columns; ++i1) {
+	            	logger.debug("DB SQL getColumnLabel: " + md.getColumnLabel(i1)); 
+	            	logger.debug("DB SQL getObject: " + resultset.getObject(i1)); 
 	                row.put(md.getColumnLabel(i1),resultset.getObject(i1));
 	            }
 	            list.add(row);                 
@@ -457,23 +582,6 @@ public class KeymileConsumer extends ScheduledPollConsumer {
         return ds;
     }
 	
-	public static String setRightValue(String colour)
-	{
-		String newstatus = "";
-		
-		switch (colour) {
-        	case "#006600":  newstatus = "OK";break;
-        	case "#FF0000":  newstatus = "ERROR";break;
-        	default: newstatus = "NA";break;
-
-        	
-		}
-		/*
-		System.out.println("***************** colour: " + colour);
-		System.out.println("***************** status: " + newstatus);
-		*/
-		return newstatus;
-	}
 	
 	public static String setRightSeverity(String severity)
 	{
@@ -495,65 +603,5 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 		return newseverity;
 	}
 	
-	public void removeLineFromFile(String file, String lineToRemove) {
-		BufferedReader br = null;
-		PrintWriter pw = null;
-	    try {
-
-	      File inFile = new File(file);
-
-	      if (!inFile.isFile()) {
-	        System.out.println("Parameter is not an existing file");
-	        return;
-	      }
-
-	      //Construct the new file that will later be renamed to the original filename.
-	      File tempFile = new File(inFile.getAbsolutePath() + ".tmp");
-
-	      br = new BufferedReader(new FileReader(file));
-	      pw = new PrintWriter(new FileWriter(tempFile));
-
-	      String line = null;
-
-	      //Read from the original file and write to the new
-	      //unless content matches data to be removed.
-	      while ((line = br.readLine()) != null) {
-
-	        if (!line.trim().equals(lineToRemove)) {
-
-	          pw.println(line);
-	          pw.flush();
-	        }
-	      }
-	      pw.close();
-	      br.close();
-
-	      //Delete the original file
-	      if (!inFile.delete()) {
-	        System.out.println("Could not delete file");
-	        return;
-	      }
-
-	      //Rename the new file to the filename the original file had.
-	      if (!tempFile.renameTo(inFile))
-	        System.out.println("Could not rename file");
-
-	    }
-	    catch (FileNotFoundException ex) {
-	      ex.printStackTrace();
-	    }
-	    catch (IOException ex) {
-	      ex.printStackTrace();
-	    }
-	    finally {
-	    	try {
-	    		pw.close();
-				br.close();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-	  }
-
+	
 }

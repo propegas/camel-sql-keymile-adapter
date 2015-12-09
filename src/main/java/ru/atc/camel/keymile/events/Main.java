@@ -23,7 +23,7 @@ import org.apache.camel.model.dataformat.JsonLibrary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.sf.ehcache.CacheManager;
+//import net.sf.ehcache.CacheManager;
 
 //import net.sf.ehcache.config.CacheConfiguration;
 //import net.sf.ehcache.config.Configuration;
