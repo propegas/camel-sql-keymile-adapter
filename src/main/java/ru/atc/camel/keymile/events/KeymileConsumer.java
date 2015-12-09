@@ -234,16 +234,17 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 			//logger.info( String.format("***Try to get VMs statuses***"));
 			for(int i=0; i < listAllEvents.size(); i++) {
 			  	
+				/*
 				alarmtext = listAllEvents.get(i).get("alarmtext").toString();
 				location  = listAllEvents.get(i).get("location").toString();
 				logger.debug("DB row " + i + ": " + alarmtext + 
 						" " + location);
+				*/
 				
-				genevent = genEventObj(listAllEvents.get(i));
+				genevent = genEventObj(listAllEvents.get(i), dataSource);
 				
 				logger.debug("*** Create Exchange ***" );
-				
-				
+
 				String key = genevent.getHost() + "_" +
 						genevent.getExternalid() + "_" + 
 						genevent.getStatus();
@@ -333,6 +334,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 		
 		int event_count = 0;
 		List<HashMap<String,Object>> list = new ArrayList<HashMap<String,Object>>();
+		List<HashMap<String,Object>> listc = new ArrayList<HashMap<String,Object>>();
 		Connection con = null; 
 	    PreparedStatement pstmt;
 	    ResultSet resultset = null;
@@ -341,7 +343,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 	    try {
 	    	for(int i=0; i < openids.length; i++){
 	    		
-	    		logger.debug(" **** Try to receive Closed Events for " + openids[i] );
+	    		logger.debug(" **** Try to receive Closed Event for " + openids[i] );
 		    	con = (Connection) dataSource.getConnection();
 				//con.setAutoCommit(false);
 				
@@ -354,18 +356,36 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 		                "AND alarm.alarmofftime is not null " + 
 		                "AND alarm.slotid = unit.slot  " +
 		                "AND alarm.neid = unit.neid "+
-		                "AND alarm.id = ?");
+		                "AND alarm.id = ? " + 
+		                "AND layer = ?");
 		                   // +" LIMIT ?;");
 		        //pstmt.setString(1, "");
-		        pstmt.setString(1, openids[i]);
+		        pstmt.setString(1, openids[i]); // id
+		        pstmt.setInt(2, 0); // layer
 		        
 		        logger.debug("DB query: " +  pstmt.toString()); 
 		        resultset = pstmt.executeQuery();
 		        //con.commit();
 		        
-		        list = convertRStoList(resultset);
-		        list.addAll(list);
+		        listc = convertRStoList(resultset);
+		        list.addAll(listc);
+		        
+		        listc = getEventById(openids[i], dataSource);
+		        // if no alarm id in table
+		        if (listc.size() == 0 ){
+		        	
+		        	logger.info("DB alarm: " +  openids[i] + " not found"); 
+		        	int columns = 2;
+		        	HashMap<String,Object> row = new HashMap<String, Object>(columns);
+		     
+		        	row.put("id",openids[i]);
+		        	
+		        	logger.debug("Put \"closed\" mark to hash"); 
+		        	row.put("closed","1");
 
+		            list.add(row); 
+		        }
+		       
 		        resultset.close();
 		        pstmt.close();
 		        
@@ -398,7 +418,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 		
 	}
 
-	private List<HashMap<String, Object>> getOpenEvents(BasicDataSource dataSource) throws SQLException {
+	private List<HashMap<String, Object>> getOpenEvents(BasicDataSource dataSource) throws SQLException, Throwable {
 		// TODO Auto-generated method stub
 	    
 		List<HashMap<String,Object>> list = new ArrayList<HashMap<String,Object>>();
@@ -406,6 +426,8 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 	    Connection con = null; 
 	    PreparedStatement pstmt;
 	    ResultSet resultset = null;
+	    
+	    logger.info(" **** Try to receive Open Events ***** " );
 	    try {
 	    	con = (Connection) dataSource.getConnection();
 			//con.setAutoCommit(false);
@@ -418,10 +440,11 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 	                "WHERE alarm.neid = ne.neid " +
 	                "AND alarm.alarmofftime is null   " +
 	                "AND alarm.slotid = unit.slot  " +
-	                "AND alarm.neid = unit.neid;");
+	                "AND alarm.neid = unit.neid " + 
+	                "AND layer = ?;");
 	                   // +" LIMIT ?;");
 	        //pstmt.setString(1, "");
-	        //pstmt.setInt(2, 3);
+	        pstmt.setInt(1, 0);
 	        
 	        logger.debug("DB query: " +  pstmt.toString()); 
 	        resultset = pstmt.executeQuery();
@@ -474,44 +497,121 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 	
 		
 	}
+	
+	private List<HashMap<String, Object>> getEventById(String id, BasicDataSource dataSource) throws SQLException, Throwable {
+		// TODO Auto-generated method stub
+	    
+		List<HashMap<String,Object>> list = new ArrayList<HashMap<String,Object>>();
+		
+	    Connection con = null; 
+	    PreparedStatement pstmt;
+	    ResultSet resultset = null;
+	    
+	    logger.info(" **** Try to get Event by ID for " + id );
+	    try {
+	    	con = (Connection) dataSource.getConnection();
+			//con.setAutoCommit(false);
+			
+	        pstmt = con.prepareStatement("SELECT  " + 
+	        		"id FROM public.alarm " +
+	                "WHERE alarm.id = ?;");
+	                   // +" LIMIT ?;");
+	        //pstmt.setString(1, "");
+	        pstmt.setString(1, id); // id
+	        
+	        logger.debug("DB query: " +  pstmt.toString()); 
+	        resultset = pstmt.executeQuery();
+	        
+	        list = convertRStoList(resultset);
+	        
+	        resultset.close();
+	        pstmt.close();
+	        
+	        if (con != null) con.close();
+	        
+	        return list;
+	        
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			//e.printStackTrace();
+			logger.error( String.format("Error while SQL execution: %s ", e));
+			
+			if (con != null) con.close();
+			
+			//return null;
+			throw e;
+	
+		} catch (Throwable e) { //send error message to the same queue
+			// TODO Auto-generated catch block
+			logger.error( String.format("Error while execution: %s ", e));
+			//genErrorMessage(e.getMessage());
+			// 0;
+			throw e;
+		} finally {
+	        if (con != null) con.close();
+	        
+	        //return list;
+	    }
+	    
+	
+		
+	}
 
-	private Event genEventObj(HashMap<String, Object> alarm) {
+	private Event genEventObj(HashMap<String, Object> alarm, BasicDataSource dataSource) throws SQLException, Throwable {
 		// TODO Auto-generated method stub
 		Event event;
+		boolean oldeventclosed = false;
+		List<HashMap<String,Object>> evlist = new ArrayList<HashMap<String,Object>>();
 		
 		event = new Event();
 		
 		logger.debug( String.format("ID: %s ", alarm.get("id").toString()));
 		
-		Long eventclosedate = (long) 0, eventopendate = (long) 0;
-		eventopendate = (long) Integer.parseInt(alarm.get("alarmontime").toString());
-		eventclosedate = (long) Integer.parseInt(alarm.get("alarmofftime").toString());
-		
-		logger.debug( String.format("alarmofftime: %s, %d ", alarm.get("alarmofftime").toString(), eventclosedate ));
-		
-		event.setHost(alarm.get("ne_name").toString());
-		//event.setCi(vmtitle);
-		//vmStatuses.get("ping_colour").toString())
-		event.setObject(alarm.get("moi").toString());
-		event.setExternalid(alarm.get("id").toString());
-		event.setCi(String.format("%s",alarm.get("unitid").toString()));
-		//event.setParametr("Status");
-		//String status = "OPEN";
-		//event.setParametrValue(status);
-		event.setSeverity(setRightSeverity(alarm.get("perceivedseverity").toString()));
-		event.setMessage(String.format("Ошибка на оборудовании Keymile (%s): %s (%s)", 
-								alarm.get("ne_name").toString(),
-								alarm.get("alarmtext").toString(),
-								alarm.get("location").toString()
-								));
-		event.setCategory("NETWORK");
-		if (eventclosedate != 0) {
-			event.setTimestamp(eventclosedate);
+		//evlist = getEventById(alarm.get("id").toString(), dataSource);
+		if (alarm.containsKey("closed")) {
+			
+			logger.debug("Has \"closed\" mark in hash"); 
+			oldeventclosed = true;
+			event.setHost("");
+			event.setExternalid(alarm.get("id").toString());
+			event.setSeverity( PersistentEventSeverity.OK.name());
 			event.setStatus("CLOSED");
+			event.setMessage(String.format("Ошибка на оборудовании Keymile устранена"));
+			
 		}
 		else {
-			event.setTimestamp(eventopendate);
-			event.setStatus("OPEN");
+			Long eventclosedate = (long) 0, eventopendate = (long) 0;
+			eventopendate = (long) Integer.parseInt(alarm.get("alarmontime").toString());
+			eventclosedate = (long) Integer.parseInt(alarm.get("alarmofftime").toString());
+			
+			logger.debug( String.format("alarmofftime: %s, %d ", alarm.get("alarmofftime").toString(), eventclosedate ));
+			
+			event.setHost(alarm.get("ne_name").toString());
+			//event.setCi(vmtitle);
+			//vmStatuses.get("ping_colour").toString())
+			event.setObject(alarm.get("moi").toString());
+			event.setExternalid(alarm.get("id").toString());
+			event.setCi(String.format("%s",alarm.get("unitid").toString()));
+			//event.setParametr("Status");
+			//String status = "OPEN";
+			//event.setParametrValue(status);
+			
+			event.setSeverity(setRightSeverity(alarm.get("perceivedseverity").toString()));
+			
+			event.setMessage(String.format("Ошибка на оборудовании Keymile (%s): %s (%s)", 
+									alarm.get("ne_name").toString(),
+									alarm.get("alarmtext").toString(),
+									alarm.get("location").toString()
+									));
+			event.setCategory("NETWORK");
+			if (eventclosedate != 0) {
+				event.setTimestamp(eventclosedate);
+				event.setStatus("CLOSED");
+			}
+			else {
+				event.setTimestamp(eventopendate);
+				event.setStatus("OPEN");
+			}
 		}
 		
 		//event.setService(endpoint.getConfiguration().getSource());
