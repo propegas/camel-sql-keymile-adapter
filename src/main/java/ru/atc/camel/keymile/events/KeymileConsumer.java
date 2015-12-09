@@ -337,7 +337,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 	    PreparedStatement pstmt;
 	    ResultSet resultset = null;
 	    
-	    logger.debug(" **** Try to receive Closed Events ***** " );
+	    logger.info(" **** Try to receive Closed Events ***** " );
 	    try {
 	    	for(int i=0; i < openids.length; i++){
 	    		
