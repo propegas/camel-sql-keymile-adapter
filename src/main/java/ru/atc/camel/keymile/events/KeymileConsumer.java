@@ -66,7 +66,7 @@ import org.postgresql.Driver;
 
 public class KeymileConsumer extends ScheduledPollConsumer {
 	
-	private String[] openids = { null };
+	private String[] openids = {  };
 	
 	private static Logger logger = LoggerFactory.getLogger(Main.class);
 	
@@ -211,15 +211,16 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 		//int statuses = 0;
 		try {
 			
-			logger.info( String.format("***Try to get Open Events***"));
-			
+			// get All Closed events
+			if (openids.length != 0) {
+				logger.info( String.format("***Try to get Closed Events***"));
+				listClosedEvents = getClosedEvents(dataSource);
+				logger.info( String.format("***Received %d Closed Events from SQL***", listClosedEvents.size()));
+			}
 			// get All new (Open) events
+			logger.info( String.format("***Try to get Open Events***"));
 			listOpenEvents = getOpenEvents(dataSource);
 			logger.info( String.format("***Received %d Open Events from SQL***", listOpenEvents.size()));
-			
-			// get All Closed events
-			listClosedEvents = getClosedEvents(dataSource);
-			logger.info( String.format("***Received %d Closed Events from SQL***", listClosedEvents.size()));
 			
 			List<HashMap<String, Object>> listAllEvents = new ArrayList<HashMap<String,Object>>();
 			listAllEvents.addAll(listOpenEvents);
@@ -275,8 +276,8 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 					
 			}
 			
-			logger.info( String.format("***Received %d Keymile Open Events from SQL*** ", listOpenEvents.size()));
-			logger.info( String.format("***Received %d Keymile Closed Events from SQL*** ", listClosedEvents.size()));
+			logger.debug( String.format("***Received %d Keymile Open Events from SQL*** ", listOpenEvents.size()));
+			logger.debug( String.format("***Received %d Keymile Closed Events from SQL*** ", listClosedEvents.size()));
 			
            // logger.info(" **** Received " + events.length + " Opened Events ****");
     		
@@ -356,8 +357,8 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 		                "AND alarm.alarmofftime is not null " + 
 		                "AND alarm.slotid = unit.slot  " +
 		                "AND alarm.neid = unit.neid "+
-		                "AND alarm.id = ? " + 
-		                "AND layer = ?");
+		                "AND alarm.id = cast(? as INTEGER) " + 
+		                "AND layer = cast(? as INTEGER)");
 		                   // +" LIMIT ?;");
 		        //pstmt.setString(1, "");
 		        pstmt.setString(1, openids[i]); // id
@@ -507,14 +508,14 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 	    PreparedStatement pstmt;
 	    ResultSet resultset = null;
 	    
-	    logger.info(" **** Try to get Event by ID for " + id );
+	    logger.debug(" **** Try to get Event by ID for " + id );
 	    try {
 	    	con = (Connection) dataSource.getConnection();
 			//con.setAutoCommit(false);
 			
 	        pstmt = con.prepareStatement("SELECT  " + 
 	        		"id FROM public.alarm " +
-	                "WHERE alarm.id = ?;");
+	                "WHERE alarm.id = cast(? as INTEGER);");
 	                   // +" LIMIT ?;");
 	        //pstmt.setString(1, "");
 	        pstmt.setString(1, id); // id
