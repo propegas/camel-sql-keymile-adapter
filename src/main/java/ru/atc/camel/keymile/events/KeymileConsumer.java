@@ -437,19 +437,36 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 	    	con = (Connection) dataSource.getConnection();
 			//con.setAutoCommit(false);
 			
-	        pstmt = con.prepareStatement("SELECT  " + 
+	        pstmt = con.prepareStatement("select tt.*, ttt.unitid, ttt.nodeid from "
+	        	+ "(SELECT  " + 
 	        		"id, alarm.neid as neid, cast(coalesce(nullif(ne.name, ''), '') as text) as ne_name, "
 	        		+ " eventid,  moi, perceivedseverity, alarm.location as location, " +
 					" alarmtext, alarmontime, cast(coalesce(nullif(alarmofftime, 0),'0') as integer) as alarmofftime, slotid, layerid, subunitid, unitname, " +
 	                " unit.cfgname as cfgname,  unit.cfgdescription as cfgdescription,  "
 	                + " cast(coalesce(nullif(unitid, 0),'0') as integer) as unitid " + 
-					"FROM  public.alarm left join public.ne " +
+				"FROM  public.alarm left join public.ne " +
 	                "on alarm.neid = ne.neid left join public.unit " +
 	                "on alarm.slotid = unit.slot  " +
 	                "AND alarm.neid = unit.neid " + 
 	                "AND layer = ? " +
-	                " WHERE (alarm.alarmofftime is null OR  " +
-	                " alarm.alarmofftime = ?);");
+	            " WHERE (alarm.alarmofftime is null OR  " +
+	                " alarm.alarmofftime = ?) ) tt " +
+	                "inner join (select t1.*, " +
+	                " t2.unitid " +
+	                "from ( " +
+	                "SELECT nodeid, " +
+	                "treehierarchy, " +
+	                "split_part(treehierarchy, '.', 2) as x, " +
+	                "split_part(treehierarchy, '.', 3) as y, " +
+	                "split_part(treehierarchy, '.', 4) as z, " +
+	                "typeclass " +
+	                "FROM public.node t1 " +
+	                "where t1.typeclass in (1, 2) and " +
+	                "t1.type <> '' /*and t2.z = ''*/ " +
+	                "order by t1.nodeid " +
+	                " ) t1 " +
+	                "left join public.unit t2 on t1.x = t2.neid and t1.y = t2.slot and t2.layer " +
+	        		"= 0) ttt on tt.unitid = ttt.unitid; ") ;
 	                   // +" LIMIT ?;");
 	        //pstmt.setString(1, "");
 	        pstmt.setInt(1, 0);
@@ -603,7 +620,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 			//vmStatuses.get("ping_colour").toString())
 			event.setObject(alarm.get("moi").toString());
 			event.setExternalid(alarm.get("id").toString());
-			event.setCi(String.format("%s",alarm.get("unitid").toString()));
+			event.setCi(String.format("%s",alarm.get("nodeid").toString()));
 			//event.setParametr("Status");
 			//String status = "OPEN";
 			//event.setParametrValue(status);
