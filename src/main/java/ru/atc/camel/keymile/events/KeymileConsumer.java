@@ -185,7 +185,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
         exchange.getIn().setHeader("Timestamp", timestamp);
         exchange.getIn().setHeader("queueName", "Heartbeats");
         exchange.getIn().setHeader("Type", "Heartbeats");
-        exchange.getIn().setHeader("Source", "OVMM_EVENTS_ADAPTER");
+        exchange.getIn().setHeader("Source", String.format("%s", endpoint.getConfiguration().getAdaptername()));
 
         try {
         	//Processor processor = getProcessor();
@@ -246,8 +246,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 				
 				logger.debug("*** Create Exchange ***" );
 
-				String key = genevent.getHost() + "_" +
-						genevent.getExternalid() + "_" + 
+				String key = genevent.getExternalid() + "_" + 
 						genevent.getStatus();
 				
 				Exchange exchange = getEndpoint().createExchange();
@@ -349,20 +348,25 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 				//con.setAutoCommit(false);
 				
 		        pstmt = con.prepareStatement("SELECT  " + 
-		        		"id, alarm.neid as neid, ne.name as ne_name, eventid,  moi, perceivedseverity, alarm.location as location, " +
+		        		"id, cast(coalesce(nullif(ne.name, ''), '') as text) as ne_name, "
+		        		+ "eventid,  moi, perceivedseverity, alarm.location as location, " +
 						" alarmtext, alarmontime, cast(coalesce(nullif(alarmofftime, 0),'0') as integer) as alarmofftime, slotid, layerid, subunitid, unitname, " +
-						" unit.cfgname as cfgname,  unit.cfgdescription as cfgdescription,  unit.unitid  " + 
-						"FROM  public.alarm, public.ne, public.unit  " +
-		                "WHERE alarm.neid = ne.neid " +
-		                "AND alarm.alarmofftime is not null " + 
-		                "AND alarm.slotid = unit.slot  " +
-		                "AND alarm.neid = unit.neid "+
-		                "AND alarm.id = cast(? as INTEGER) " + 
-		                "AND layer = cast(? as INTEGER)");
+						" unit.cfgname as cfgname,  unit.cfgdescription as cfgdescription,  "
+						+ " cast(coalesce(nullif(unitid, 0),'0') as integer) as unitid " + 
+						"FROM  public.alarm left join public.ne " +
+		                "on alarm.neid = ne.neid left join public.unit " +
+		                "on alarm.slotid = unit.slot  " +
+		                "AND alarm.neid = unit.neid " + 
+		                "AND layer = ? " +
+		                "WHERE (alarm.alarmofftime is not null and  " +
+		                " alarm.alarmofftime != ?) "
+		                + "AND alarm.id = cast(? as INTEGER) ;");
 		                   // +" LIMIT ?;");
+
 		        //pstmt.setString(1, "");
-		        pstmt.setString(1, openids[i]); // id
-		        pstmt.setInt(2, 0); // layer
+		        pstmt.setString(3, openids[i]); // id
+		        pstmt.setInt(1, 0); // layer
+		        pstmt.setInt(2, 0); // alarmofftime
 		        
 		        logger.debug("DB query: " +  pstmt.toString()); 
 		        resultset = pstmt.executeQuery();
@@ -434,18 +438,22 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 			//con.setAutoCommit(false);
 			
 	        pstmt = con.prepareStatement("SELECT  " + 
-	        		"id, alarm.neid as neid, ne.name as ne_name, eventid,  moi, perceivedseverity, alarm.location as location, " +
+	        		"id, alarm.neid as neid, cast(coalesce(nullif(ne.name, ''), '') as text) as ne_name, "
+	        		+ " eventid,  moi, perceivedseverity, alarm.location as location, " +
 					" alarmtext, alarmontime, cast(coalesce(nullif(alarmofftime, 0),'0') as integer) as alarmofftime, slotid, layerid, subunitid, unitname, " +
-	                " unit.cfgname as cfgname,  unit.cfgdescription as cfgdescription,  unit.unitid  " + 
-					"FROM  public.alarm, public.ne, public.unit " +
-	                "WHERE alarm.neid = ne.neid " +
-	                "AND alarm.alarmofftime is null   " +
-	                "AND alarm.slotid = unit.slot  " +
+	                " unit.cfgname as cfgname,  unit.cfgdescription as cfgdescription,  "
+	                + " cast(coalesce(nullif(unitid, 0),'0') as integer) as unitid " + 
+					"FROM  public.alarm left join public.ne " +
+	                "on alarm.neid = ne.neid left join public.unit " +
+	                "on alarm.slotid = unit.slot  " +
 	                "AND alarm.neid = unit.neid " + 
-	                "AND layer = ?;");
+	                "AND layer = ? " +
+	                " WHERE (alarm.alarmofftime is null OR  " +
+	                " alarm.alarmofftime = ?);");
 	                   // +" LIMIT ?;");
 	        //pstmt.setString(1, "");
 	        pstmt.setInt(1, 0);
+	        pstmt.setInt(2, 0);
 	        
 	        logger.debug("DB query: " +  pstmt.toString()); 
 	        resultset = pstmt.executeQuery();
@@ -572,9 +580,12 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 		if (alarm.containsKey("closed")) {
 			
 			logger.debug("Has \"closed\" mark in hash"); 
+			long timestamp = System.currentTimeMillis();
+			timestamp = timestamp / 1000;
 			oldeventclosed = true;
 			event.setHost("");
 			event.setExternalid(alarm.get("id").toString());
+			event.setTimestamp(timestamp);
 			event.setSeverity( PersistentEventSeverity.OK.name());
 			event.setStatus("CLOSED");
 			event.setMessage(String.format("Ошибка на оборудовании Keymile устранена"));
