@@ -55,11 +55,9 @@ public class Main {
 		logger.info("Starting Custom Apache Camel component example");
 		logger.info("Press CTRL+C to terminate the JVM");
 		
-		if ( args.length == 4  ) {
+		if ( args.length == 2  ) {
 			activemq_port = (String)args[1];
 			activemq_ip = (String)args[0];
-			postgresql_ip = (String)args[2];
-			postgresql_port = (String)args[3];
 		}
 		
 		if (activemq_port == null || activemq_port == "" )
@@ -70,14 +68,7 @@ public class Main {
 		logger.info("activemq_ip: " + activemq_ip);
 		logger.info("activemq_port: " + activemq_port);
 		
-		if (postgresql_ip == null || postgresql_ip == "" )
-			postgresql_ip = "localhost";
-		if (postgresql_port == null || postgresql_port == "" )
-			postgresql_port = "5433";
-		
-		logger.info("postgresql_ip: " + postgresql_ip);
-		logger.info("postgresql_port: " + postgresql_port);
-		
+	
 		org.apache.camel.main.Main main = new org.apache.camel.main.Main();
 		main.enableHangupSupport();
 		
