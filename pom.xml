@@ -3,11 +3,13 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>ru.atc.monitoring</groupId>
 	<artifactId>camel-sql-keymile-adapter</artifactId>
-	<version>0.3-SNAPSHOT</version>
+	<version>0.4-SNAPSHOT</version>
 	
 	<properties>
  		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
  		<camel-version>2.15.3</camel-version>
+		<checkstyle.version>6.11.2</checkstyle.version>
+		<checkstyle.plugin.version>2.17</checkstyle.plugin.version>
 	</properties>
 
 	<dependencies>
@@ -112,7 +114,37 @@
 	</dependencies>
 
 	<build>
+
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-checkstyle-plugin</artifactId>
+				<version>${checkstyle.plugin.version}</version>
+				<dependencies>
+					<dependency>
+						<groupId>com.puppycrawl.tools</groupId>
+						<artifactId>checkstyle</artifactId>
+						<version>${checkstyle.version}</version>
+					</dependency>
+				</dependencies>
+				<configuration>
+					<configLocation>checkstyle.xml</configLocation>
+					<suppressionsLocation>checkstyle_suppress.xml</suppressionsLocation>
+					<consoleOutput>true</consoleOutput>
+					<failsOnError>true</failsOnError>
+					<failOnViolation>true</failOnViolation>
+					<outputFileFormat>xml</outputFileFormat>
+					<includeTestSourceDirectory>true</includeTestSourceDirectory>
+				</configuration>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 		
 			<!-- Required for HTML and Json annotation-based doc generation -->
 			<!-- APT requires compiler compliance level 1.6 -->
@@ -189,6 +221,10 @@
 				<artifactId>maven-jar-plugin</artifactId>
 				<version>2.6</version>
 				<configuration>
+					<excludes>
+						<exclude>*.properties</exclude>
+						<exclude>*.xml</exclude>
+					</excludes>
 					<archive>
 						<manifest>
 							<addClasspath>true</addClasspath>
@@ -200,7 +236,7 @@
 						</manifestEntries>
 					</archive>
  
-					<finalName>camelKeymile/camelKeymile</finalName>
+					<finalName>camelKeymile/camelKeymile-${project.version}</finalName>
 				</configuration>
 			</plugin>
 			

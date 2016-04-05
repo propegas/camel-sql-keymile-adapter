@@ -7,47 +7,45 @@ import org.apache.camel.impl.DefaultPollingEndpoint;
 import org.apache.camel.spi.UriEndpoint;
 import org.apache.camel.spi.UriParam;
 
-@UriEndpoint(scheme="keymile", title="Keymile", syntax="keymile://operationPath", consumerOnly=true, consumerClass=KeymileConsumer.class, label="keymile")
+@UriEndpoint(scheme = "keymile", title = "Keymile", syntax = "keymile://operationPath", consumerOnly = true, consumerClass = KeymileConsumer.class, label = "keymile")
 public class KeymileEndpoint extends DefaultPollingEndpoint {
 
-	public KeymileEndpoint(String uri, String operationPath, KeymileComponent component) {
-		super(uri, component);
-		this.operationPath = operationPath;
-	}
-	
-	private String operationPath;
+    private String operationPath;
+    @UriParam
+    private KeymileConfiguration configuration;
 
-	@UriParam
-	private KeymileConfiguration configuration;
+    public KeymileEndpoint(String uri, String operationPath, KeymileComponent component) {
+        super(uri, component);
+        this.operationPath = operationPath;
+    }
 
-	public Producer createProducer() throws Exception {
-		throw new UnsupportedOperationException("OVMMProducer is not implemented");
-	}
+    public Producer createProducer() throws Exception {
+        throw new UnsupportedOperationException("OVMMProducer is not implemented");
+    }
 
-	@Override
-	public Consumer createConsumer(Processor processor) throws Exception {
-		KeymileConsumer consumer = new KeymileConsumer(this, processor);
-        return consumer;
-	}
+    @Override
+    public Consumer createConsumer(Processor processor) throws Exception {
+        return new KeymileConsumer(this, processor);
+    }
 
-	public boolean isSingleton() {
-		return true;
-	}
+    public boolean isSingleton() {
+        return true;
+    }
 
-	public String getOperationPath() {
-		return operationPath;
-	}
+    public String getOperationPath() {
+        return operationPath;
+    }
 
-	public void setOperationPath(String operationPath) {
-		this.operationPath = operationPath;
-	}
+    public void setOperationPath(String operationPath) {
+        this.operationPath = operationPath;
+    }
 
-	public KeymileConfiguration getConfiguration() {
-		return configuration;
-	}
+    public KeymileConfiguration getConfiguration() {
+        return configuration;
+    }
 
-	public void setConfiguration(KeymileConfiguration configuration) {
-		this.configuration = configuration;
-	}
-	
+    public void setConfiguration(KeymileConfiguration configuration) {
+        this.configuration = configuration;
+    }
+
 }

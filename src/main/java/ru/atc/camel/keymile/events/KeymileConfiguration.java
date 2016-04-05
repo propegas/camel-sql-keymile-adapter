@@ -4,114 +4,89 @@ import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriParams;
 
 @UriParams
-public class KeymileConfiguration {	
-    
-	private String username;
-	
-	private String password;
-	
-	private String source;
-	
-	private String adaptername;
-	
-	
-	@UriParam
-    private String postgresql_db;
-    
-    @UriParam
-    private String postgresql_host;
-    
-    @UriParam
-    private String table_prefix;
-    
-    public String getTable_prefix() {
-		return table_prefix;
-	}
+public class KeymileConfiguration {
 
-	public void setTable_prefix(String table_prefix) {
-		this.table_prefix = table_prefix;
-	}
+    private static final int DELAY = 60000;
 
-	@UriParam
-    private String postgresql_port;
-    
+    private String username;
+    private String password;
+    private String source;
+    private String adaptername;
+
     @UriParam
-    private String query;
-    
+    private String postgresqlDb;
+
+    @UriParam
+    private String postgresqlHost;
+
+    @UriParam
+    private String postgresqlPort;
+
     @UriParam(defaultValue = "60000")
-    private int delay = 60000;
+    private int delay = DELAY;
 
-	public int getDelay() {
-		return delay;
-	}
+    public int getDelay() {
+        return delay;
+    }
 
-	public void setDelay(int delay) {
-		this.delay = delay;
-	}
+    public void setDelay(int delay) {
+        this.delay = delay;
+    }
 
-	public String getUsername() {
-		return username;
-	}
+    public String getUsername() {
+        return username;
+    }
 
-	public void setUsername(String username) {
-		this.username = username;
-	}
+    public void setUsername(String username) {
+        this.username = username;
+    }
 
-	public String getPassword() {
-		return password;
-	}
+    public String getPassword() {
+        return password;
+    }
 
-	public void setPassword(String password) {
-		this.password = password;
-	}
+    public void setPassword(String password) {
+        this.password = password;
+    }
 
-	public String getPostgresql_port() {
-		return postgresql_port;
-	}
+    public String getPostgresqlPort() {
+        return postgresqlPort;
+    }
 
-	public void setPostgresql_port(String postgresql_port) {
-		this.postgresql_port = postgresql_port;
-	}
+    public void setPostgresqlPort(String postgresqlPort) {
+        this.postgresqlPort = postgresqlPort;
+    }
 
-	public String getPostgresql_host() {
-		return postgresql_host;
-	}
+    public String getPostgresqlHost() {
+        return postgresqlHost;
+    }
 
-	public void setPostgresql_host(String postgresql_host) {
-		this.postgresql_host = postgresql_host;
-	}
+    public void setPostgresqlHost(String postgresqlHost) {
+        this.postgresqlHost = postgresqlHost;
+    }
 
-	public String getQuery() {
-		return query;
-	}
+    public String getPostgresqlDb() {
+        return postgresqlDb;
+    }
 
-	public void setQuery(String query) {
-		this.query = query;
-	}
+    public void setPostgresqlDb(String postgresqlDb) {
+        this.postgresqlDb = postgresqlDb;
+    }
 
-	public String getPostgresql_db() {
-		return postgresql_db;
-	}
+    public String getSource() {
+        return source;
+    }
 
-	public void setPostgresql_db(String postgresql_db) {
-		this.postgresql_db = postgresql_db;
-	}
+    public void setSource(String source) {
+        this.source = source;
+    }
 
-	public String getSource() {
-		return source;
-	}
+    public String getAdaptername() {
+        return adaptername;
+    }
 
-	public void setSource(String source) {
-		this.source = source;
-	}
-
-	public String getAdaptername() {
-		return adaptername;
-	}
-
-	public void setAdaptername(String adaptername) {
-		this.adaptername = adaptername;
-	}
-
+    public void setAdaptername(String adaptername) {
+        this.adaptername = adaptername;
+    }
 
 }
