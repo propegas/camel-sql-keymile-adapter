@@ -1,9 +1,9 @@
 package ru.atc.camel.keymile.events;
 
-import java.util.Map;
-
 import org.apache.camel.Endpoint;
 import org.apache.camel.impl.UriEndpointComponent;
+
+import java.util.Map;
 
 public class KeymileComponent extends UriEndpointComponent {
 

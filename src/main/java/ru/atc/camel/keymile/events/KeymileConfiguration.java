@@ -1,6 +1,5 @@
 package ru.atc.camel.keymile.events;
 
-import org.apache.camel.spi.UriParam;
 import org.apache.camel.spi.UriParams;
 
 @UriParams
@@ -13,16 +12,11 @@ public class KeymileConfiguration {
     private String source;
     private String adaptername;
 
-    @UriParam
     private String postgresqlDb;
 
-    @UriParam
     private String postgresqlHost;
 
-    @UriParam
     private String postgresqlPort;
-
-    @UriParam(defaultValue = "60000")
     private int delay = DELAY;
 
     public int getDelay() {

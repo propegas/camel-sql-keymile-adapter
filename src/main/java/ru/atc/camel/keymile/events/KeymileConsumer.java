@@ -3,12 +3,11 @@ package ru.atc.camel.keymile.events;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
 import org.apache.camel.impl.ScheduledPollConsumer;
-import org.apache.camel.model.ModelCamelContext;
 import org.apache.commons.dbcp.BasicDataSource;
-import org.apache.commons.lang.ArrayUtils;
+import org.apache.commons.lang3.ArrayUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import ru.at_consulting.itsm.event.Event;
+import ru.atc.adapters.type.Event;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -16,60 +15,26 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static ru.atc.adapters.message.CamelMessageManager.genAndSendErrorMessage;
+
 public class KeymileConsumer extends ScheduledPollConsumer {
 
-    private static KeymileEndpoint endpoint;
-    private static ModelCamelContext context;
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
+    private static KeymileEndpoint endpoint;
     private String[] openEventIds = {};
     private String[] openCiIds = {};
 
     public KeymileConsumer(KeymileEndpoint endpoint, Processor processor) {
         super(endpoint, processor);
         KeymileConsumer.endpoint = endpoint;
-        //this.afterPoll();
         this.setTimeUnit(TimeUnit.MINUTES);
         this.setInitialDelay(0);
         this.setDelay(endpoint.getConfiguration().getDelay());
-    }
-
-    public static ModelCamelContext getContext() {
-        // TODO Auto-generated method stub
-        return context;
-    }
-
-    public static void setContext(ModelCamelContext context1) {
-        context = context1;
-
-    }
-
-    public static void genHeartbeatMessage(Exchange exchange) {
-        // TODO Auto-generated method stub
-        long timestamp = System.currentTimeMillis();
-        timestamp = timestamp / 1000;
-
-        Event genevent = new Event();
-        genevent.setMessage("Сигнал HEARTBEAT от адаптера");
-        genevent.setEventCategory("ADAPTER");
-        genevent.setObject("HEARTBEAT");
-        genevent.setSeverity(PersistentEventSeverity.OK.name());
-        genevent.setTimestamp(timestamp);
-
-        genevent.setEventsource(String.format("%s", endpoint.getConfiguration().getAdaptername()));
-
-        logger.info(" **** Create Exchange for Heartbeat Message container");
-        //Exchange exchange = getEndpoint().createExchange();
-        exchange.getIn().setBody(genevent, Event.class);
-
-        exchange.getIn().setHeader("Timestamp", timestamp);
-        exchange.getIn().setHeader("queueName", "Heartbeats");
-        exchange.getIn().setHeader("Type", "Heartbeats");
-        exchange.getIn().setHeader("Source", String.format("%s", endpoint.getConfiguration().getAdaptername()));
-
     }
 
     public static String setRightSeverity(String severity) {
@@ -77,19 +42,19 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 
         switch (severity) {
             case "0":
-                newseverity = PersistentEventSeverity.CRITICAL.name();
+                newseverity = Event.PersistentEventSeverity.CRITICAL.name();
                 break;
             case "1":
-                newseverity = PersistentEventSeverity.MAJOR.name();
+                newseverity = Event.PersistentEventSeverity.MAJOR.name();
                 break;
             case "2":
-                newseverity = PersistentEventSeverity.MINOR.name();
+                newseverity = Event.PersistentEventSeverity.MINOR.name();
                 break;
             case "3":
-                newseverity = PersistentEventSeverity.INFO.name();
+                newseverity = Event.PersistentEventSeverity.INFO.name();
                 break;
             default:
-                newseverity = PersistentEventSeverity.INFO.name();
+                newseverity = Event.PersistentEventSeverity.INFO.name();
                 break;
 
         }
@@ -102,7 +67,8 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 
         String operationPath = endpoint.getOperationPath();
 
-        if ("events".equals(operationPath)) return processSearchEvents();
+        if ("events".equals(operationPath))
+            return processSearchEvents();
 
         // only one operation implemented for now !
         throw new IllegalArgumentException("Incorrect operation: " + operationPath);
@@ -116,50 +82,14 @@ public class KeymileConsumer extends ScheduledPollConsumer {
         return timeout;
     }
 
-    private void genErrorMessage(String message) {
-        // TODO Auto-generated method stub
-        long timestamp = System.currentTimeMillis();
-        timestamp = timestamp / 1000;
-        String textError = "Возникла ошибка при работе адаптера: ";
-        Event genevent = new Event();
-        genevent.setMessage(textError + message);
-        genevent.setEventCategory("ADAPTER");
-        genevent.setSeverity(PersistentEventSeverity.CRITICAL.name());
-        genevent.setTimestamp(timestamp);
+    private int processSearchEvents() {
 
-        genevent.setEventsource(String.format("%s", endpoint.getConfiguration().getAdaptername()));
-
-        genevent.setStatus("OPEN");
-        genevent.setHost("adapter");
-
-        logger.info(" **** Create Exchange for Error Message container");
-        Exchange exchange = getEndpoint().createExchange();
-        exchange.getIn().setBody(genevent, Event.class);
-
-        exchange.getIn().setHeader("EventIdAndStatus", "Error_" + timestamp);
-        exchange.getIn().setHeader("Timestamp", timestamp);
-        exchange.getIn().setHeader("queueName", "Events");
-        exchange.getIn().setHeader("Type", "Error");
-
-        try {
-            getProcessor().process(exchange);
-        } catch (Exception e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-
-    }
-
-    // "throws Exception"
-    private int processSearchEvents() throws Exception {
-
-        //Long timestamp;
         BasicDataSource dataSource = setupDataSource();
 
         List<HashMap<String, Object>> listOpenEvents;
         List<HashMap<String, Object>> listClosedEvents = new ArrayList<>();
         int events = 0;
-        //int statuses = 0;
+
         try {
 
             // get All Closed events
@@ -177,63 +107,60 @@ public class KeymileConsumer extends ScheduledPollConsumer {
             listAllEvents.addAll(listOpenEvents);
             listAllEvents.addAll(listClosedEvents);
 
-            Event genevent;
-
-            for (int i = 0; i < listAllEvents.size(); i++) {
-
-                genevent = genEventObj(listAllEvents.get(i));
-
-                logger.debug("*** Create Exchange ***");
-
-                String key = genevent.getExternalid() + "_" +
-                        genevent.getStatus();
-
-                Exchange exchange = getEndpoint().createExchange();
-                exchange.getIn().setBody(genevent, Event.class);
-                exchange.getIn().setHeader("EventUniqId", key);
-
-                exchange.getIn().setHeader("Object", genevent.getObject());
-                exchange.getIn().setHeader("Timestamp", genevent.getTimestamp());
-
-                try {
-                    getProcessor().process(exchange);
-                    events++;
-
-                    //File cachefile = new File("sendedEvents.dat");
-                    //removeLineFromFile("sendedEvents.dat", "Tgc1-1Cp1_ping_OK");
-
-                } catch (Exception e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                    logger.error(String.format("Error while process Exchange message: %s ", e));
-                }
-
-            }
+            events = genAndProcessEvents(listAllEvents);
 
             logger.debug(String.format("***Received %d Keymile Open Events from SQL*** ", listOpenEvents.size()));
             logger.debug(String.format("***Received %d Keymile Closed Events from SQL*** ", listClosedEvents.size()));
 
-        } catch (Throwable e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-            logger.error(String.format("Error while get Events from SQL: %s ", e));
-            genErrorMessage(e.getMessage() + " " + e.toString());
-            dataSource.close();
+        } catch (Exception e) {
+            genErrorMessage("Error while get Events from DB", e);
             return 0;
         } finally {
-            dataSource.close();
-            //return 0;
+            closeConnectionsAndDS(dataSource);
         }
-
-        dataSource.close();
 
         logger.info(String.format("***Sended to Exchange messages: %d ***", events));
 
         return 1;
     }
 
+    private int genAndProcessEvents(List<HashMap<String, Object>> listAllEvents) {
+        Event genevent;
+
+        int events = 0;
+        for (HashMap<String, Object> listAllEvent : listAllEvents) {
+
+            genevent = genEventObj(listAllEvent);
+
+            logger.debug("*** Create Exchange ***");
+
+            String key = genevent.getExternalid() + "_" +
+                    genevent.getStatus();
+
+            Exchange exchange = getEndpoint().createExchange();
+            exchange.getIn().setBody(genevent, Event.class);
+            exchange.getIn().setHeader("EventUniqId", key);
+
+            exchange.getIn().setHeader("Object", genevent.getObject());
+            exchange.getIn().setHeader("Timestamp", genevent.getTimestamp());
+
+            try {
+                getProcessor().process(exchange);
+                events++;
+            } catch (Exception e) {
+                genErrorMessage("Error while process Exchange message ", e);
+            }
+
+        }
+        return events;
+    }
+
+    private void genErrorMessage(String message, Exception exception) {
+        genAndSendErrorMessage(this, message, exception,
+                endpoint.getConfiguration().getAdaptername());
+    }
+
     private List<HashMap<String, Object>> getClosedEvents(BasicDataSource dataSource) throws SQLException {
-        // TODO Auto-generated method stub
 
         List<HashMap<String, Object>> list = new ArrayList<>();
         List<HashMap<String, Object>> listClosedEvents;
@@ -247,58 +174,56 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 
                 logger.debug(" **** Try to receive Closed Event for " + openEventIds[i]);
                 con = dataSource.getConnection();
-                //con.setAutoCommit(false);
 
-                pstmt = con.prepareStatement("select tt.*, " +
+                pstmt = con.prepareStatement("SELECT tt.*, " +
                         "       ttt.unitid, " +
                         "       ttt.nodeid " +
-                        "from ( " +
+                        "FROM ( " +
                         "       SELECT id, " +
-                        "              alarm.neid as neid, " +
-                        "              cast (coalesce(nullif(ne.name, ''), '') as text) as ne_name, " +
+                        "              alarm.neid AS neid, " +
+                        "              cast (coalesce(nullif(ne.name, ''), '') AS TEXT) AS ne_name, " +
                         "              eventid, " +
                         "              moi, " +
                         "              perceivedseverity, " +
-                        "              alarm.location as location, " +
+                        "              alarm.location AS location, " +
                         "              alarmtext, " +
                         "              alarmontime, " +
-                        "              cast (coalesce(nullif(alarmofftime, 0), 0) as integer) as " +
+                        "              cast (coalesce(nullif(alarmofftime, 0), 0) AS INTEGER) AS " +
                         "                alarmofftime, " +
                         "              slotid, " +
                         "              layerid, " +
                         "              subunitid, " +
                         "              unitname, " +
-                        "              unit.cfgname as cfgname, " +
-                        "              unit.cfgdescription as cfgdescription, " +
-                        "              cast (coalesce(nullif(unitid, 0), '0') as integer) as unitid " +
+                        "              unit.cfgname AS cfgname, " +
+                        "              unit.cfgdescription AS cfgdescription, " +
+                        "              cast (coalesce(nullif(unitid, 0), '0') AS INTEGER) AS unitid " +
                         "       FROM public.alarm " +
-                        "            left join public.ne on alarm.neid = ne.neid " +
-                        "            left join public.unit on alarm.slotid = unit.slot AND alarm.neid = " +
+                        "            LEFT JOIN public.ne ON alarm.neid = ne.neid " +
+                        "            LEFT JOIN public.unit ON alarm.slotid = unit.slot AND alarm.neid = " +
                         "              unit.neid AND layer = ? " +
-                        "       WHERE (alarm.alarmofftime is not null AND " +
+                        "       WHERE (alarm.alarmofftime IS NOT NULL AND " +
                         "            alarm.alarmofftime != ?) AND  " +
-                        "            alarm.id = CAST(? as integer) " +
+                        "            alarm.id = CAST(? AS INTEGER) " +
                         "     ) tt " +
-                        "     inner join  " +
+                        "     INNER JOIN  " +
                         "     ( " +
-                        "       select t1.*, " +
+                        "       SELECT t1.*, " +
                         "              t2.unitid " +
-                        "       from ( " +
+                        "       FROM ( " +
                         "              SELECT nodeid, " +
                         "                     treehierarchy, " +
-                        "                     cast (coalesce(nullif(split_part(treehierarchy, '.', 2), ''), '0') as integer) as x , " +
-                        "                     cast (coalesce(nullif(split_part(treehierarchy, '.', 3), ''), '0') as integer) as y , " +
-                        "                     split_part(treehierarchy, '.', 4) as z, " +
+                        "                     cast (coalesce(nullif(split_part(treehierarchy, '.', 2), ''), '0') AS INTEGER) AS x , " +
+                        "                     cast (coalesce(nullif(split_part(treehierarchy, '.', 3), ''), '0') AS INTEGER) AS y , " +
+                        "                     split_part(treehierarchy, '.', 4) AS z, " +
                         "                     typeclass " +
                         "              FROM public.node t1 " +
-                        "              where t1.typeclass in (1, 2) and " +
+                        "              WHERE t1.typeclass IN (1, 2) AND " +
                         "                    t1.type <> '' /*and t2.z = ''*/ " +
-                        "              order by t1.nodeid " +
+                        "              ORDER BY t1.nodeid " +
                         "            ) t1 " +
-                        "            left join public.unit t2 on t1.x = t2.neid and t1.y = t2.slot and " +
+                        "            LEFT JOIN public.unit t2 ON t1.x = t2.neid AND t1.y = t2.slot AND " +
                         "              t2.layer = 0 " +
-                        "     ) ttt on tt.unitid = ttt.unitid ");
-                // +" LIMIT ?;");
+                        "     ) ttt ON tt.unitid = ttt.unitid ");
 
                 pstmt.setInt(1, 0); // layer
                 pstmt.setInt(2, 0); // alarmofftime
@@ -306,7 +231,6 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 
                 logger.debug("DB query: " + pstmt.toString());
                 resultset = pstmt.executeQuery();
-                //con.commit();
 
                 listClosedEvents = convertRStoList(resultset);
                 if (listClosedEvents != null) {
@@ -315,7 +239,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 
                 List<HashMap<String, Object>> listEventsById = getEventById(openEventIds[i], dataSource);
                 // if no alarm id in table
-                if (listEventsById.size() == 0) {
+                if (listEventsById.isEmpty()) {
 
                     logger.info("DB alarm: " + openEventIds[i] + " not found");
                     int columns = 3;
@@ -335,37 +259,21 @@ public class KeymileConsumer extends ScheduledPollConsumer {
                 resultset.close();
                 pstmt.close();
 
-                if (con != null) con.close();
+                con.close();
             }
 
             return list;
 
-        } catch (SQLException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
-            logger.error(String.format("Error while SQL execution: %s ", e));
-
-            if (con != null) con.close();
-
-            //return null;
-            throw e;
-
-        } catch (Throwable e) { //send error message to the same queue
-            // TODO Auto-generated catch block
-            logger.error(String.format("Error while execution: %s ", e));
-            //genErrorMessage(e.getMessage());
-            // 0;
-            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка при операции с базой данных ", e);
         } finally {
-            if (con != null) con.close();
-
-            //return list;
+            if (con != null)
+                con.close();
         }
 
     }
 
     private List<HashMap<String, Object>> getOpenEvents(BasicDataSource dataSource) throws SQLException {
-        // TODO Auto-generated method stub
 
         List<HashMap<String, Object>> listOpenedEvents;
 
@@ -376,58 +284,55 @@ public class KeymileConsumer extends ScheduledPollConsumer {
         logger.info(" **** Try to receive Open Events ***** ");
         try {
             con = dataSource.getConnection();
-            //con.setAutoCommit(false);
 
-            pstmt = con.prepareStatement("select tt.*, " +
+            pstmt = con.prepareStatement("SELECT tt.*, " +
                     "       ttt.unitid, " +
                     "       ttt.nodeid " +
-                    "from ( " +
+                    "FROM ( " +
                     "       SELECT id, " +
-                    "              alarm.neid as neid, " +
-                    "              cast (coalesce(nullif(ne.name, ''), '') as text) as ne_name, " +
+                    "              alarm.neid AS neid, " +
+                    "              cast (coalesce(nullif(ne.name, ''), '') AS TEXT) AS ne_name, " +
                     "              eventid, " +
                     "              moi, " +
                     "              perceivedseverity, " +
-                    "              alarm.location as location, " +
+                    "              alarm.location AS location, " +
                     "              alarmtext, " +
                     "              alarmontime, " +
-                    "              cast (coalesce(nullif(alarmofftime, 0), 0) as integer) as " +
+                    "              cast (coalesce(nullif(alarmofftime, 0), 0) AS INTEGER) AS " +
                     "                alarmofftime, " +
                     "              slotid, " +
                     "              layerid, " +
                     "              subunitid, " +
                     "              unitname, " +
-                    "              unit.cfgname as cfgname, " +
-                    "              unit.cfgdescription as cfgdescription, " +
-                    "              cast (coalesce(nullif(unitid, 0), '0') as integer) as unitid " +
+                    "              unit.cfgname AS cfgname, " +
+                    "              unit.cfgdescription AS cfgdescription, " +
+                    "              cast (coalesce(nullif(unitid, 0), '0') AS INTEGER) AS unitid " +
                     "       FROM public.alarm " +
-                    "            left join public.ne on alarm.neid = ne.neid " +
-                    "            left join public.unit on alarm.slotid = unit.slot AND alarm.neid = " +
+                    "            LEFT JOIN public.ne ON alarm.neid = ne.neid " +
+                    "            LEFT JOIN public.unit ON alarm.slotid = unit.slot AND alarm.neid = " +
                     "              unit.neid AND layer = '0' " +
-                    "       WHERE (alarm.alarmofftime is null OR " +
+                    "       WHERE (alarm.alarmofftime IS NULL OR " +
                     "             alarm.alarmofftime = ?) " +
                     "     ) tt " +
-                    "     inner join  " +
+                    "     INNER JOIN  " +
                     "     ( " +
-                    "       select t1.*, " +
+                    "       SELECT t1.*, " +
                     "              t2.unitid " +
-                    "       from ( " +
+                    "       FROM ( " +
                     "              SELECT nodeid, " +
                     "                     treehierarchy, " +
-                    "                     cast (coalesce(nullif(split_part(treehierarchy, '.', 2), ''), '0') as integer) as x , " +
-                    "                     cast (coalesce(nullif(split_part(treehierarchy, '.', 3), ''), '0') as integer) as y , " +
-                    "                     split_part(treehierarchy, '.', 4) as z, " +
+                    "                     cast (coalesce(nullif(split_part(treehierarchy, '.', 2), ''), '0') AS INTEGER) AS x , " +
+                    "                     cast (coalesce(nullif(split_part(treehierarchy, '.', 3), ''), '0') AS INTEGER) AS y , " +
+                    "                     split_part(treehierarchy, '.', 4) AS z, " +
                     "                     typeclass " +
                     "              FROM public.node t1 " +
-                    "              where t1.typeclass in (1, 2) and " +
+                    "              WHERE t1.typeclass IN (1, 2) AND " +
                     "                    t1.type <> '' /*and t2.z = ''*/ " +
-                    "              order by t1.nodeid " +
+                    "              ORDER BY t1.nodeid " +
                     "            ) t1 " +
-                    "            left join public.unit t2 on t1.x = t2.neid and t1.y = t2.slot and " +
+                    "            LEFT JOIN public.unit t2 ON t1.x = t2.neid AND t1.y = t2.slot AND " +
                     "              t2.layer = ? " +
-                    "     ) ttt on tt.unitid = ttt.unitid ");
-            // +" LIMIT ?;");
-            //pstmt.setString(1, "");
+                    "     ) ttt ON tt.unitid = ttt.unitid ");
             pstmt.setInt(1, 0); //alarmofftime
             pstmt.setInt(2, 0); //layer
 
@@ -439,18 +344,18 @@ public class KeymileConsumer extends ScheduledPollConsumer {
             resultset.close();
             pstmt.close();
 
-            if (con != null) con.close();
+            con.close();
 
             logger.debug(" **** Saving Received opened events's IDs and CI IDs ****");
 
             openEventIds = new String[]{};
             openCiIds = new String[]{};
             if (listOpenedEvents != null) {
-                for (int i = 0; i < listOpenedEvents.size(); i++) {
-                    openEventIds = (String[]) ArrayUtils.add(openEventIds, listOpenedEvents.get(i).get("id").toString());
-                    openCiIds = (String[]) ArrayUtils.add(openCiIds, listOpenedEvents.get(i).get("nodeid").toString());
-                    logger.debug(" **** Saving ID: " + listOpenedEvents.get(i).get("id").toString());
-                    logger.debug(" **** Saving CI ID: " + listOpenedEvents.get(i).get("nodeid").toString());
+                for (HashMap<String, Object> listOpenedEvent : listOpenedEvents) {
+                    openEventIds = ArrayUtils.add(openEventIds, listOpenedEvent.get("id").toString());
+                    openCiIds = ArrayUtils.add(openCiIds, listOpenedEvent.get("nodeid").toString());
+                    logger.debug(" **** Saving ID: " + listOpenedEvent.get("id").toString());
+                    logger.debug(" **** Saving CI ID: " + listOpenedEvent.get("nodeid").toString());
                 }
             }
 
@@ -458,30 +363,16 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 
             return listOpenedEvents;
 
-        } catch (SQLException e) {
-            //e.printStackTrace();
-            logger.error(String.format("Error while SQL execution: %s ", e));
-
-            if (con != null) con.close();
-
-            //return null;
-            throw e;
-
-        } catch (Throwable e) { //send error message to the same queue
-            logger.error(String.format("Error while execution: %s ", e));
-            //genErrorMessage(e.getMessage());
-            // 0;
-            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка при операции с БД", e);
         } finally {
-            if (con != null) con.close();
-
-            //return list;
+            if (con != null)
+                con.close();
         }
 
     }
 
     private List<HashMap<String, Object>> getEventById(String id, BasicDataSource dataSource) throws SQLException {
-        // TODO Auto-generated method stub
 
         List<HashMap<String, Object>> list;
 
@@ -492,13 +383,10 @@ public class KeymileConsumer extends ScheduledPollConsumer {
         logger.debug(" **** Try to get Event by ID for " + id);
         try {
             con = dataSource.getConnection();
-            //con.setAutoCommit(false);
 
             pstmt = con.prepareStatement("SELECT  " +
                     "id FROM public.alarm " +
-                    "WHERE alarm.id = cast(? as INTEGER);");
-            // +" LIMIT ?;");
-            //pstmt.setString(1, "");
+                    "WHERE alarm.id = cast(? AS INTEGER);");
             pstmt.setString(1, id); // id
 
             logger.debug("DB query: " + pstmt.toString());
@@ -509,30 +397,15 @@ public class KeymileConsumer extends ScheduledPollConsumer {
             resultset.close();
             pstmt.close();
 
-            if (con != null) con.close();
+            con.close();
 
             return list;
 
-        } catch (SQLException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
-            logger.error(String.format("Error while SQL execution: %s ", e));
-
-            if (con != null) con.close();
-
-            //return null;
-            throw e;
-
-        } catch (Throwable e) { //send error message to the same queue
-            // TODO Auto-generated catch block
-            logger.error(String.format("Error while execution: %s ", e));
-            //genErrorMessage(e.getMessage());
-            // 0;
-            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка при операции с БД", e);
         } finally {
-            if (con != null) con.close();
-
-            //return list;
+            if (con != null)
+                con.close();
         }
 
     }
@@ -555,7 +428,7 @@ public class KeymileConsumer extends ScheduledPollConsumer {
             );
             event.setExternalid(alarm.get("id").toString());
             event.setTimestamp(timestamp);
-            event.setSeverity(PersistentEventSeverity.OK.name());
+            event.setSeverity(Event.PersistentEventSeverity.OK.name());
             event.setStatus("CLOSED");
             event.setMessage("Ошибка на оборудовании Keymile устранена");
 
@@ -624,11 +497,8 @@ public class KeymileConsumer extends ScheduledPollConsumer {
             return list;
 
         } catch (SQLException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-
-            return null;
-
+            genErrorMessage("Ошибка конвертирования результата запроса", e);
+            return Collections.emptyList();
         }
     }
 
@@ -640,6 +510,8 @@ public class KeymileConsumer extends ScheduledPollConsumer {
 
         BasicDataSource ds = new BasicDataSource();
         ds.setDriverClassName("org.postgresql.Driver");
+        ds.setMaxIdle(10);
+        ds.setMinIdle(5);
         ds.setUsername(endpoint.getConfiguration().getUsername());
         ds.setPassword(endpoint.getConfiguration().getPassword());
         ds.setUrl(url);
@@ -647,15 +519,11 @@ public class KeymileConsumer extends ScheduledPollConsumer {
         return ds;
     }
 
-    public enum PersistentEventSeverity {
-        OK, INFO, WARNING, MINOR, MAJOR, CRITICAL;
-
-        public static PersistentEventSeverity fromValue(String v) {
-            return valueOf(v);
-        }
-
-        public String value() {
-            return name();
+    private void closeConnectionsAndDS(BasicDataSource dataSource) {
+        try {
+            dataSource.close();
+        } catch (SQLException e) {
+            logger.error("Error while closing Datasource", e);
         }
     }
 
